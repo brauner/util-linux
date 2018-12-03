@@ -152,6 +152,7 @@ int main(int argc, char *argv[])
 	ln = add_line(tb, NULL, "foo", "bla bla bla");
 	add_line(tb, ln, "foo-child", "bla bla bla");
 	add_line(tb, NULL, "bar", "bla bla bla");
+	scols_table_group_lines(tb, g1, ln);
 
 	scols_print_table(tb);
 

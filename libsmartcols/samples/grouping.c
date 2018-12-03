@@ -115,6 +115,11 @@ int main(int argc, char *argv[])
 	ln = add_line(tb, NULL, "G2-B", "bla bla bla");
 	scols_table_group_lines(tb, g2, ln);
 
+	add_line(tb, ln, "G2-B-A", "bla bla bla");
+	add_line(tb, ln, "G2-B-B", "bla bla bla");
+	add_line(tb, ln, "G2-B-C", "bla bla bla");
+
+
 	/* add children to the g1 */
 	ln = add_line(tb, NULL, "g1-child-A", "alb alb alb");
 	scols_line_link_group(ln, g1);

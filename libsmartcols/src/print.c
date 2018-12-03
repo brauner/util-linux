@@ -106,12 +106,11 @@ static size_t group_to_buffer(
 {
 	char *start;
 
-	DBG(GROUP, ul_debugobj(gr, "draw line=%p", ln));
-
 	start = buffer_get_position(buf);
 
 	if (ln->group != gr && ln->parent_group != gr) {
-		DBG(GROUP, ul_debugobj(gr, " fill space only"));
+		DBG(GROUP, ul_debugobj(gr, " fill space only %s", gr->state == SCOLS_GRSTATE_CROSS ? "[cross]" : ""));
+
 		if (gr->state == SCOLS_GRSTATE_MEMBERS)
 			buffer_append_data(buf, grp_vertical_symbol(tb));
 
@@ -124,9 +123,11 @@ static size_t group_to_buffer(
 		//buffer_append_data(buf, grp_m_first_symbol(tb));
 		//*artend = member_mark_symbol(tb);
 		if (ln->parent_group) {
-			buffer_append_data(buf, "┌▶");
-			if (is_last_group_child(ln))
+			buffer_append_data(buf, "┌┈▶");
+			if (is_last_group_child(ln)) {
+				DBG(GROUP, ul_debugobj(gr, ">>>>LAST"));
 				ln->group->seqnum++;
+			}
 		} else {
 			buffer_append_data(buf, "┌");
 			*artend = "┈▶";
@@ -137,32 +138,52 @@ static size_t group_to_buffer(
 		ln->group->state = SCOLS_GRSTATE_CHILDREN;
 		//buffer_append_data(buf, grp_m_last_symbol(tb));
 		//*artend = member_mark_symbol(tb);
-		buffer_append_data(buf, "└");
-		*artend = "┬▶";
-
+		if (ln->parent_group) {
+			buffer_append_data(buf, "└┬▶");
+			if (has_children(ln)) {
+				/* we print group children immediately after group, but in case
+				 * that last group member has child we need to wait and print later */
+				ln->group->state = SCOLS_GRSTATE_CROSS;
+			}
+		} else {
+			buffer_append_data(buf, "└");
+			*artend = "┬▶";
+		}
 	} else if (ln->group == gr && is_group_member(ln)) {
 		DBG(GROUP, ul_debugobj(gr, " middle member"));
 		//buffer_append_data(buf, grp_m_middle_symbol(tb));
 		//*artend = member_mark_symbol(tb);
-		buffer_append_data(buf, "├");
-		*artend = "┈▶";
+		if (ln->parent_group) {
+			buffer_append_data(buf, "├┈▶");
+		} else {
+			buffer_append_data(buf, "├");
+			*artend = "┈▶";
+		}
 
 	} else if (ln->parent_group == gr && is_last_group_child(ln)) {
 		DBG(GROUP, ul_debugobj(gr, " last child"));
-		ln->parent_group->state = SCOLS_GRSTATE_NONE;
 		list_del_init(&ln->parent_group->gr_groups_active);
 		DBG(GROUP, ul_debugobj(gr, "  remove active group [%zu]", ln->parent_group->seqnum));
 		//buffer_append_data(buf, grp_c_last_symbol(tb));
 		//*artend = grp_horizontal_symbol(tb);
-		buffer_append_data(buf, " ");
-		*artend = "└┈";
+		if (ln->parent_group->state == SCOLS_GRSTATE_CROSS)
+			buffer_append_data(buf, "└┈");
+		else {
+			buffer_append_data(buf, " ");
+			*artend = "└┈";
+		}
+		ln->parent_group->state = SCOLS_GRSTATE_NONE;
 
 	} else if (ln->parent_group == gr && is_group_child(ln)) {
 		DBG(GROUP, ul_debugobj(gr, " middle child"));
 		//buffer_append_data(buf, grp_c_middle_symbol(tb));
 		//*artend = grp_horizontal_symbol(tb);
-		buffer_append_data(buf, " ");
-		*artend = "├┈";
+		if (ln->parent_group->state == SCOLS_GRSTATE_CROSS)
+			buffer_append_data(buf, "├┈");
+		else {
+			buffer_append_data(buf, " ");
+			*artend = "├┈";
+		}
 	}
 
 	if (start != buffer_get_position(buf))
@@ -180,7 +201,7 @@ static int groups_ascii_art_to_buffer(	struct libscols_table *tb,
 
 	if (!has_groups(tb))
 		return 0;
-	maxwidth = tb->ngroups + 2 + tb->ngroups_extra;
+	maxwidth = tb->ngroups + 2 + (tb->cross_relation ? 2 : 0);
 
 	/* already active */
 	if (has_active_groups(tb)) {
@@ -190,10 +211,15 @@ static int groups_ascii_art_to_buffer(	struct libscols_table *tb,
 
 		scols_reset_iter(&itr, SCOLS_ITER_FORWARD);
 		while (scols_table_next_active_group(tb, &itr, &gr) == 0) {
+			DBG(GROUP, ul_debugobj(gr, " active group"));
 			ct++;
 			for (i = ct; i < gr->seqnum; i++) {
 				buffer_append_data(buf, /*cellpadding_symbol(tb)*/ "%");
 				width++;
+				if (gr->state == SCOLS_GRSTATE_CROSS) {
+					buffer_append_data(buf, /*cellpadding_symbol(tb)*/ "~");
+					width++;
+				}
 			}
 			width += group_to_buffer(tb, ln, gr, buf, &artend);
 		}
@@ -205,7 +231,11 @@ static int groups_ascii_art_to_buffer(	struct libscols_table *tb,
 	if (is_group_child(ln) || is_group_member(ln)) {
 		if (artend)
 			width += 2;
-		fill = is_group_member(ln) ? grp_horizontal_symbol(tb) : /*cellpadding_symbol(tb);*/ "#";
+		if ((is_group_member(ln) && !is_group_child(ln))
+		    || (artend == NULL && is_group_child(ln)))
+			fill = grp_horizontal_symbol(tb);
+		else
+			fill = /*cellpadding_symbol(tb);*/ "*";
 	} else {
 		fill = "#"; //cellpadding_symbol(tb);
 		if (!ln->parent) {

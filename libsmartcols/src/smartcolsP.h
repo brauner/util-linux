@@ -138,7 +138,8 @@ struct libscols_column {
 enum {
 	SCOLS_GRSTATE_NONE = 0,		/* not printed yet */
 	SCOLS_GRSTATE_MEMBERS,		/* in members printing stage */
-	SCOLS_GRSTATE_CHILDREN		/* in children printing stage */
+	SCOLS_GRSTATE_CHILDREN,		/* in children printing stage */
+	SCOLS_GRSTATE_CROSS		/* wait for children printing due to cross reference */
 };
 
 struct libscols_group {
@@ -213,7 +214,6 @@ struct libscols_table {
 	struct list_head	tb_groups;		/* all defined groups */
 	struct list_head	tb_groups_active;	/* groups we print right now */
 	size_t			ngroups;		/* number of overlapping groups */
-	size_t			ngroups_extra;		/* group child is member of another group */
 
 	struct libscols_symbols	*symbols;
 	struct libscols_cell	title;		/* optional table title (for humans) */
@@ -234,6 +234,7 @@ struct libscols_table {
 			header_repeat   :1,     /* print header after libscols_table->termheight */
 			header_printed  :1,	/* header already printed */
 			priv_symbols	:1,	/* default private symbols */
+			cross_relation	:1,	/* group child is member of another group */
 			no_headings	:1,	/* don't print header */
 			no_encode	:1,	/* don't care about control and non-printable chars */
 			no_linesep	:1,	/* don't print line separator */
@@ -413,6 +414,11 @@ static inline int has_active_groups(struct libscols_table *tb)
 static inline int has_groups(struct libscols_table *tb)
 {
 	return tb && !list_empty(&tb->tb_groups);
+}
+
+static inline int has_children(struct libscols_line *ln)
+{
+	return ln && !list_empty(&ln->ln_branch);
 }
 
 #endif /* _LIBSMARTCOLS_PRIVATE_H */
