@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
 {
 	struct libscols_table *tb;
 	struct libscols_line *ln;	/* any line */
-	struct libscols_line *g1, *g2;	/* groups */
+	struct libscols_line *g1, *g2, *gx;	/* groups */
 	struct libscols_line *p1, *p2;	/* parents */
 	int c;
 
@@ -94,44 +94,59 @@ int main(int argc, char *argv[])
 	scols_table_enable_colors(tb, isatty(STDOUT_FILENO));
 	setup_columns(tb);
 
-	add_line(tb, NULL, "AAA", "bla bla bla");
-
 	/* standard tree (independent on grouping) */
 	p1 = add_line(tb, NULL, "X-parent", "bla bla bla");
 	g1 = add_line(tb, p1, "X-a(G1-A)", "bla bla bla");
-	g2 = p2 = add_line(tb, p1, "X-b", "bla bla bla");
+	gx = p2 = add_line(tb, p1, "X-b", "bla bla bla");
 	add_line(tb, p2, "X-b-a", "bla bla bla");
-	add_line(tb, p1, "X-c", "bla bla bla");
 
-	/* create another group G2 */
-	ln = add_line(tb, NULL, "G2-A", "bla bla bla");
-	scols_table_group_lines(tb, g2, ln);
+	ln = add_line(tb, p1, "X-c", "bla bla bla");
+	scols_table_group_lines(tb, gx, ln);
+
+	ln = add_line(tb, NULL, "gx-child", "alb alb alb");
+	scols_line_link_group(ln, gx);
 
 	/* create group G1 (from line g1 and ln) */
 	ln = add_line(tb, NULL, "G1-B", "alb alb alb");
 	scols_table_group_lines(tb, g1, ln);
 
-	/* add to group g2 */
-	ln = add_line(tb, NULL, "G2-B", "bla bla bla");
-	scols_table_group_lines(tb, g2, ln);
-
-	/* add children to the g1 */
-	ln = add_line(tb, NULL, "g1-child-A", "alb alb alb");
-	scols_line_link_group(ln, g1);
-	ln = add_line(tb, NULL, "g1-child-B", "alb alb alb");
-	scols_line_link_group(ln, g1);
-
 	/* add member to the g1 */
 	ln = add_line(tb, NULL, "G1-C", "alb alb alb");
 	scols_table_group_lines(tb, g1, ln);
+
+	/* add child to the g1 */
+	g2 = ln = add_line(tb, NULL, "g1-child-A", "alb alb alb");
+	scols_line_link_group(ln, g1);
+
+	/* add child to the g1 */
+	ln = add_line(tb, NULL, "g1-child-B", "alb alb alb");
+	scols_line_link_group(ln, g1);
+	scols_table_group_lines(tb, g2, ln);
+
+	/* add child to the g1 */
+	ln = add_line(tb, NULL, "g1-child-C", "alb alb alb");
+	scols_line_link_group(ln, g1);
+	scols_table_group_lines(tb, g2, ln);
+
+	/* it's possible to use standard tree for group children */
+	add_line(tb, ln, "g1-child-C-A", "alb alb alb");
+	add_line(tb, ln, "g1-child-C-B", "alb alb alb");
+
+	/* add member to g2 */
+//	ln = add_line(tb, NULL, "G2-B", "bla bla bla");
+//	scols_table_group_lines(tb, g2, ln);
+
+	/* add to group g2 */
+//	ln = add_line(tb, NULL, "G2-C", "bla bla bla");
+//	scols_table_group_lines(tb, g2, ln);
 
 	/* add child to group g2 */
 	ln = add_line(tb, NULL, "g2-child-A", "alb alb alb");
 	scols_line_link_group(ln, g2);
 
-	/* it's possible to use standard tree for group children */
-	add_line(tb, ln, "g1-child-B-A", "alb alb alb");
-	add_line(tb, ln, "g1-child-B-B", "alb alb alb");
+	ln = add_line(tb, NULL, "g2-child-B", "alb alb alb");
+	scols_line_link_group(ln, g2);
+
 
 	/* standard (independent) line */
 	ln = add_line(tb, NULL, "foo", "bla bla bla");
