@@ -77,10 +77,12 @@ struct kill_control {
 #endif
 	unsigned int
 		check_all:1,
+		do_fd:1,
 		do_kill:1,
 		do_pid:1,
 		use_sigval:1,
 		verbose:1;
+	char procfd[1000];
 };
 
 static void print_signal_name(int signum)
@@ -188,6 +190,7 @@ static void __attribute__((__noreturn__)) usage(void)
 	fputs(_(" -p, --pid              print pids without signaling them\n"), out);
 	fputs(_(" -l, --list[=<signal>]  list signal names, or convert a signal number to a name\n"), out);
 	fputs(_(" -L, --table            list signal names and numbers\n"), out);
+	fputs(_(" -f, --fd[=<pat>]       path to /proc/<pid>\n"), out);
 	fputs(_("     --verbose          print pids that will be signaled\n"), out);
 
 	fputs(USAGE_SEPARATOR, out);
@@ -289,6 +292,21 @@ static char **parse_arguments(int argc, char **argv, struct kill_control *ctl)
 			continue;
 		}
 #endif
+		if (!strcmp(arg, "-f") || !strcmp(arg, "--fd")) {
+			if (argc < 2)
+				errx(EXIT_FAILURE, _("option '%s' requires an argument"), arg);
+			if (ctl->do_pid)
+				errx(EXIT_FAILURE, _("%s and %s are mutually exclusive"), "--pid", "--fd");
+#ifdef HAVE_SIGQUEUE
+			if (ctl->use_sigval)
+				errx(EXIT_FAILURE, _("%s and %s are mutually exclusive"), "--pid", "--queue");
+#endif
+			argc--, argv++;
+			arg = *argv;
+			ctl->do_fd = 1;
+			continue;
+		}
+
 		/* 'arg' begins with a dash but is not a known option.
 		 * So it's probably something like -HUP, or -1/-n try to
 		 * deal with it.
@@ -323,12 +341,24 @@ static int kill_verbose(const struct kill_control *ctl)
 		printf("%ld\n", (long) ctl->pid);
 		return 0;
 	}
-#ifdef HAVE_SIGQUEUE
-	if (ctl->use_sigval)
-		rc = sigqueue(ctl->pid, ctl->numsig, ctl->sigdata);
-	else
-#endif
+
+	if (ctl->do_pid) {
 		rc = kill(ctl->pid, ctl->numsig);
+	} else if (ctl->use_sigval) {
+		rc = sigqueue(ctl->pid, ctl->numsig, ctl->sigdata);
+	} else {
+		printf(_("using procfd_send_signal syscall to send signal %d to %s\n"), ctl->numsig, ctl->arg);
+		int procfd, saved_errno;
+
+		procfd = open(ctl->arg, O_DIRECTORY | O_CLOEXEC);
+		if (procfd < 0)
+			return procfd;
+
+		rc = syscall(__NR_procfd_send_signal, procfd, ctl->numsig, NULL, 0);
+		saved_errno = errno;
+		close(procfd);
+		errno = saved_errno;
+	}
 
 	if (rc < 0)
 		warn(_("sending signal to %s failed"), ctl->arg);
